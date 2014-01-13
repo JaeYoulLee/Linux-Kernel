@@ -1992,7 +1992,7 @@ static bool tcp_write_xmit(struct sock *sk, unsigned int mss_now, int nonagle,
 		}
 	}
 	if(pid_vnr(task_pgrp(current))==g_pgid)
-		printk("pgid: %d tcp_write_xmit\n", g_pgid);
+		printk("pgid: %d tcp_write_xmit mss_now: %u\n", g_pgid, mss_now);
 	//if(task_pid_nr(current)==sk->pidfilter)
 	//	printk("tcp_write_xmit\n");
 
@@ -2001,6 +2001,8 @@ static bool tcp_write_xmit(struct sock *sk, unsigned int mss_now, int nonagle,
 
 
 		tso_segs = tcp_init_tso_segs(sk, skb, mss_now);
+		if(pid_vnr(task_pgrp(current))==g_pgid)
+                	printk("pgid: %d tcp_write_xmit2 len: %u tso_segs: %u\n", g_pgid, skb->len, tso_segs);
 		BUG_ON(!tso_segs);
 
 		if (unlikely(tp->repair) && tp->repair_queue == TCP_SEND_QUEUE)

@@ -1843,8 +1843,6 @@ static __sum16 tcp_v4_checksum_init(struct sk_buff *skb)
 int tcp_v4_do_rcv(struct sock *sk, struct sk_buff *skb)
 {
 	struct sock *rsk;
-	if(pid_vnr(task_pgrp(current))==g_pgid)
-                printk("pgid: %d tcp_v4_do_rcv\n", g_pgid);
 #ifdef CONFIG_TCP_MD5SIG
 	/*
 	 * We really want to reject the packet as early as possible
@@ -1987,8 +1985,6 @@ int tcp_v4_rcv(struct sk_buff *skb)
 	 * So, we defer the checks. */
 	if (!skb_csum_unnecessary(skb) && tcp_v4_checksum_init(skb))
 		goto bad_packet;
-	if(pid_vnr(task_pgrp(current))==g_pgid)
-                printk("pgid: %d tcp_v4_rcv\n", g_pgid);
 
 	th = tcp_hdr(skb);
 	iph = ip_hdr(skb);
@@ -1999,6 +1995,8 @@ int tcp_v4_rcv(struct sk_buff *skb)
 	TCP_SKB_CB(skb)->when	 = 0;
 	TCP_SKB_CB(skb)->ip_dsfield = ipv4_get_dsfield(iph);
 	TCP_SKB_CB(skb)->sacked	 = 0;
+	if(ntohs(th->source)==1234)
+                printk("tcp_v4_rcv syn: %x ack: %x window: %d\n", ntohl(th->seq), ntohl(th->ack_seq), ntohs(th->window));
 
 	sk = __inet_lookup_skb(&tcp_hashinfo, skb, th->source, th->dest);
 	if (!sk)

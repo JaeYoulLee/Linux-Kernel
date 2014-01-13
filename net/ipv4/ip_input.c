@@ -145,7 +145,6 @@
 #include <net/xfrm.h>
 #include <linux/mroute.h>
 #include <linux/netlink.h>
-extern int g_pgid;
 
 /*
  *	Process Router Attention IP option (RFC 2113)
@@ -190,8 +189,6 @@ bool ip_call_ra_chain(struct sk_buff *skb)
 static int ip_local_deliver_finish(struct sk_buff *skb)
 {
 	struct net *net = dev_net(skb->dev);
-	if(pid_vnr(task_pgrp(current))==g_pgid)
-                printk("pgid: %d ip_local_deliver_finish\n", g_pgid);
 
 	__skb_pull(skb, ip_hdrlen(skb));
 
@@ -252,8 +249,6 @@ int ip_local_deliver(struct sk_buff *skb)
 	/*
 	 *	Reassemble IP fragments.
 	 */
-	if(pid_vnr(task_pgrp(current))==g_pgid)
-                printk("pgid: %d ip_local_deliver\n", g_pgid);
 	if (ip_is_fragment(ip_hdr(skb))) {
 		if (ip_defrag(skb, IP_DEFRAG_LOCAL_DELIVER))
 			return 0;
@@ -319,8 +314,6 @@ static int ip_rcv_finish(struct sk_buff *skb)
 {
 	const struct iphdr *iph = ip_hdr(skb);
 	struct rtable *rt;
-	if(pid_vnr(task_pgrp(current))==g_pgid)
-                printk("pgid: %d ip_rcv_finish\n", g_pgid);
 
 	if (sysctl_ip_early_demux && !skb_dst(skb)) {
 		const struct net_protocol *ipprot;
@@ -423,8 +416,6 @@ int ip_rcv(struct sk_buff *skb, struct net_device *dev, struct packet_type *pt, 
 		goto inhdr_error;
 
 	iph = ip_hdr(skb);
-	if(pid_vnr(task_pgrp(current))==g_pgid)
-                printk("pgid: %d ip_rcv\n", g_pgid);
 
 	if (unlikely(ip_fast_csum((u8 *)iph, iph->ihl)))
 		goto inhdr_error;

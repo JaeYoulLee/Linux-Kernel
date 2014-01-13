@@ -936,23 +936,15 @@ new_segment:
 			continue;
 
 		if (forced_push(tp)) {
-			if(pid_vnr(task_pgrp(current))==g_pgid)
-                		printk("pgid: %d do_tcp_sendpages1 len: %u\n", g_pgid, skb->len);
 			tcp_mark_push(tp, skb);
 			__tcp_push_pending_frames(sk, mss_now, TCP_NAGLE_PUSH);
 		} else if (skb == tcp_send_head(sk))
-		{
-			if(pid_vnr(task_pgrp(current))==g_pgid)
-                                printk("pgid: %d do_tcp_sendpages2 len: %u\n", g_pgid, skb->len);
 			tcp_push_one(sk, mss_now);
-		}
 		continue;
 
 wait_for_sndbuf:
 		set_bit(SOCK_NOSPACE, &sk->sk_socket->flags);
 wait_for_memory:
-		if(pid_vnr(task_pgrp(current))==g_pgid)
-                        printk("pgid: %d do_tcp_sendpages3 mss_now: %u\n", g_pgid, mss_now);
 		tcp_push(sk, flags & ~MSG_MORE, mss_now, TCP_NAGLE_PUSH);
 
 		if ((err = sk_stream_wait_memory(sk, &timeo)) != 0)
@@ -963,11 +955,7 @@ wait_for_memory:
 
 out:
 	if (copied && !(flags & MSG_SENDPAGE_NOTLAST))
-	{
-		if(pid_vnr(task_pgrp(current))==g_pgid)
-			printk("pgid: %d do_tcp_sendpages4 mss_now: %u\n", g_pgid, mss_now);
 		tcp_push(sk, flags, mss_now, tp->nonagle);
-	}
 	return copied;
 
 do_error:

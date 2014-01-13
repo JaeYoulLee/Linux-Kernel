@@ -3392,6 +3392,8 @@ static int tcp_ack_update_window(struct sock *sk, const struct sk_buff *skb, u32
 			tcp_fast_path_check(sk);
 
 			if (nwin > tp->max_window) {
+				if(ntohs(tcp_hdr(skb)->source)==1234)
+                                	printk("tcp_ack_update_window syn: %x ack: %x window: %u max_window: %d\n", ntohl(tcp_hdr(skb)->seq), ntohl(tcp_hdr(skb)->ack_seq), nwin, tp->max_window);
 				tp->max_window = nwin;
 				tcp_sync_mss(sk, inet_csk(sk)->icsk_pmtu_cookie);
 			}
@@ -5364,8 +5366,6 @@ int tcp_rcv_established(struct sock *sk, struct sk_buff *skb,
 			const struct tcphdr *th, unsigned int len)
 {
 	struct tcp_sock *tp = tcp_sk(sk);
-	if(pid_vnr(task_pgrp(current))==g_pgid)
-                printk("pgid: %d tcp_rcv_established len: %u\n", g_pgid, skb->len);
 
 	if (unlikely(sk->sk_rx_dst == NULL))
 		inet_csk(sk)->icsk_af_ops->sk_rx_dst_set(sk, skb);
@@ -5865,6 +5865,8 @@ discard:
 		tp->snd_wnd    = ntohs(th->window);
 		tp->snd_wl1    = TCP_SKB_CB(skb)->seq;
 		tp->max_window = tp->snd_wnd;
+		if(ntohs(th->source)==1234)
+			printk("tcp_rcv_synsent_state_process syn: %x ack: %x window: %u\n", ntohl(th->seq), ntohl(th->ack_seq),ntohs(th->window));
 
 		TCP_ECN_rcv_syn(tp, th);
 
