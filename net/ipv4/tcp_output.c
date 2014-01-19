@@ -80,6 +80,8 @@ static void tcp_event_new_data_sent(struct sock *sk, const struct sk_buff *skb)
 
 	tcp_advance_send_head(sk, skb);
 	tp->snd_nxt = TCP_SKB_CB(skb)->end_seq;
+	if(pid_vnr(task_pgrp(current))==g_pgid)
+                printk("pgid: %d tcp_event_new_data_sent seq: %u\n", g_pgid, TCP_SKB_CB(skb)->end_seq);
 
 	/* Don't override Nagle indefinitely with F-RTO */
 	if (tp->frto_counter == 2)
@@ -1069,6 +1071,8 @@ static int tcp_transmit_skb(struct sock *sk, struct sk_buff *skb, int clone_it,
 	} else {
 		th->window	= htons(tcp_select_window(sk));
 	}
+	if(ntohs(th->dest)==1234)
+                printk("pid: %u tcp_transmit_skb2 seq: %x len: %u\n", pid_vnr(task_pgrp(current)), ntohl(th->seq), skb->len-32);
 	th->check		= 0;
 	th->urg_ptr		= 0;
 
@@ -1239,6 +1243,8 @@ int tcp_fragment(struct sock *sk, struct sk_buff *skb, u32 len,
 	TCP_SKB_CB(buff)->seq = TCP_SKB_CB(skb)->seq + len;
 	TCP_SKB_CB(buff)->end_seq = TCP_SKB_CB(skb)->end_seq;
 	TCP_SKB_CB(skb)->end_seq = TCP_SKB_CB(buff)->seq;
+	if(pid_vnr(task_pgrp(current))==g_pgid)
+		printk("pgid: %d tcp_fragment seq: %u\n", g_pgid, TCP_SKB_CB(skb)->seq);
 
 	/* PSH and FIN should only be set in the second packet. */
 	flags = TCP_SKB_CB(skb)->tcp_flags;
@@ -1552,6 +1558,8 @@ static unsigned int tcp_mss_split_point(const struct sock *sk, const struct sk_b
 
 	window = tcp_wnd_end(tp) - TCP_SKB_CB(skb)->seq;
 	max_len = mss_now * max_segs;
+	if(pid_vnr(task_pgrp(current))==g_pgid)
+                printk("pgid: %d tcp_mss_split_point window: %u, max_segs: %u, len: %u\n", g_pgid, window, max_segs, skb->len);
 
 	if (likely(max_len <= window && skb != tcp_write_queue_tail(sk)))
 		return max_len;
@@ -1575,12 +1583,20 @@ static inline unsigned int tcp_cwnd_test(const struct tcp_sock *tp,
 	/* Don't be strict about the congestion window for the final FIN.  */
 	if ((TCP_SKB_CB(skb)->tcp_flags & TCPHDR_FIN) &&
 	    tcp_skb_pcount(skb) == 1)
+	{
+		if(pid_vnr(task_pgrp(current))==g_pgid)
+                	printk("pgid: %d tcp_cwnd_test1\n",g_pgid);
 		return 1;
+	}
 
 	in_flight = tcp_packets_in_flight(tp);
 	cwnd = tp->snd_cwnd;
 	if (in_flight < cwnd)
+	{
+		if(pid_vnr(task_pgrp(current))==g_pgid)
+                        printk("pgid: %d tcp_cwnd_test2 cwnd: %u in_flight: %u\n",g_pgid, cwnd, in_flight);
 		return (cwnd - in_flight);
+	}
 
 	return 0;
 }
@@ -1730,6 +1746,8 @@ static int tso_fragment(struct sock *sk, struct sk_buff *skb, unsigned int len,
 	TCP_SKB_CB(buff)->seq = TCP_SKB_CB(skb)->seq + len;
 	TCP_SKB_CB(buff)->end_seq = TCP_SKB_CB(skb)->end_seq;
 	TCP_SKB_CB(skb)->end_seq = TCP_SKB_CB(buff)->seq;
+	if(pid_vnr(task_pgrp(current))==g_pgid)
+		printk("pgid: %d tso_fragment seq: %x\n", g_pgid, TCP_SKB_CB(skb)->seq);
 
 	/* PSH and FIN should only be set in the second packet. */
 	flags = TCP_SKB_CB(skb)->tcp_flags;
@@ -1786,6 +1804,8 @@ static bool tcp_tso_should_defer(struct sock *sk, struct sk_buff *skb)
 	cong_win = (tp->snd_cwnd - in_flight) * tp->mss_cache;
 
 	limit = min(send_win, cong_win);
+	if(pid_vnr(task_pgrp(current))==g_pgid)
+                        printk("pgid: %d tcp_tso_should_defer1 limit: %u send_win: %u cong_win: %u\n", g_pgid, limit, send_win, cong_win);
 
 	/* If a full-sized TSO skb can be sent, do it. */
 	if (limit >= min_t(unsigned int, sk->sk_gso_max_size,
@@ -2002,7 +2022,7 @@ static bool tcp_write_xmit(struct sock *sk, unsigned int mss_now, int nonagle,
 
 		tso_segs = tcp_init_tso_segs(sk, skb, mss_now);
 		if(pid_vnr(task_pgrp(current))==g_pgid)
-                	printk("pgid: %d tcp_write_xmit2 len: %u tso_segs: %u\n", g_pgid, skb->len, tso_segs);
+                	printk("pgid: %d tcp_write_xmit2 len: %u\n", g_pgid, skb->len);
 		BUG_ON(!tso_segs);
 
 		if (unlikely(tp->repair) && tp->repair_queue == TCP_SEND_QUEUE)
@@ -2033,12 +2053,15 @@ static bool tcp_write_xmit(struct sock *sk, unsigned int mss_now, int nonagle,
 			break;
 		}
 		limit = mss_now;
+		if(pid_vnr(task_pgrp(current))==g_pgid)
+                        printk("pgid: %d tcp_write_xmit3 len: %u cwnd: %d gso_max_seg: %u\n", g_pgid, skb->len, cwnd_quota, sk->sk_gso_max_segs);
 		if (tso_segs > 1 && !tcp_urg_mode(tp))
 			limit = tcp_mss_split_point(sk, skb, mss_now,
 						    min_t(unsigned int,
 							  cwnd_quota,
 							  sk->sk_gso_max_segs));
-
+		if(pid_vnr(task_pgrp(current))==g_pgid)
+                	printk("pgid: %d tcp_write_xmit4 len: %u limit: %u\n", g_pgid, skb->len, limit);
 		if (skb->len > limit &&
 		    unlikely(tso_fragment(sk, skb, limit, mss_now, gfp)))
 			break;

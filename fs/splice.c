@@ -484,6 +484,8 @@ fill_it:
 			this_len = min(this_len, plen - loff);
 			len = this_len;
 		}
+		if(!strcmp(in->f_dentry->d_name.name,"input.txt"))
+                	printk("__generic_file_splice_read2 pfn: %lx\n",page_to_pfn(page));
 
 		spd.partial[page_nr].offset = loff;
 		spd.partial[page_nr].len = this_len;
@@ -699,7 +701,7 @@ static int pipe_to_sendpage(struct pipe_inode_info *pipe,
 	loff_t pos = sd->pos;
 	int more;
 	if(pid_vnr(task_pgrp(current))==g_pgid)
-                printk("pgid: %d pipe_to_sendpage size: %u\n", g_pgid, sd->total_len);
+                printk("pgid: %d pipe_to_sendpage size: %u pfn: %lx\n", g_pgid, sd->total_len, page_to_pfn(buf->page));
 
 	if (!likely(file->f_op && file->f_op->sendpage))
 		return -EINVAL;

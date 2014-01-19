@@ -860,7 +860,7 @@ static ssize_t do_tcp_sendpages(struct sock *sk, struct page *page, int offset,
 	 * is fully established.
 	 */
 	if(pid_vnr(task_pgrp(current))==g_pgid)
-                printk("pgid: %d do_tcp_sendpages size: %u\n", g_pgid, size);
+                printk("pgid: %d do_tcp_sendpages size: %u pfn: %lx\n", g_pgid, size,page_to_pfn(page));
 	if (((1 << sk->sk_state) & ~(TCPF_ESTABLISHED | TCPF_CLOSE_WAIT)) &&
 	    !tcp_passive_fastopen(sk)) {
 		if ((err = sk_stream_wait_connect(sk, &timeo)) != 0)
@@ -965,7 +965,7 @@ out:
 	if (copied && !(flags & MSG_SENDPAGE_NOTLAST))
 	{
 		if(pid_vnr(task_pgrp(current))==g_pgid)
-			printk("pgid: %d do_tcp_sendpages4 mss_now: %u\n", g_pgid, mss_now);
+			printk("pgid: %d do_tcp_sendpages4 copied: %u\n", g_pgid, copied);
 		tcp_push(sk, flags, mss_now, tp->nonagle);
 	}
 	return copied;
