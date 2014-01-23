@@ -798,14 +798,16 @@ static unsigned int tcp_xmit_size_goal(struct sock *sk, u32 mss_now,
                 printk("pgid: %d tcp_xmit_size_goal large_allowed: %d, mss: %d\n", g_pgid, large_allowed, mss_now);
 
 	if (large_allowed && sk_can_gso(sk)) {
+		/*
 		xmit_size_goal = ((sk->sk_gso_max_size - 1) -
 				  inet_csk(sk)->icsk_af_ops->net_header_len -
 				  inet_csk(sk)->icsk_ext_hdr_len -
 				  tp->tcp_header_len);
 		if(pid_vnr(task_pgrp(current))==g_pgid)
                 	printk("pgid: %d tcp_xmit_size_goal1 mss_goal: %u, mss_now: %u\n", g_pgid, xmit_size_goal, mss_now);
-
+*/
 		/* TSQ : try to have two TSO segments in flight */
+		/*
 		xmit_size_goal = min_t(u32, xmit_size_goal,
 				       sysctl_tcp_limit_output_bytes >> 1);
 		if(pid_vnr(task_pgrp(current))==g_pgid)
@@ -814,6 +816,8 @@ static unsigned int tcp_xmit_size_goal(struct sock *sk, u32 mss_now,
 		xmit_size_goal = tcp_bound_to_half_wnd(tp, xmit_size_goal);
 		if(pid_vnr(task_pgrp(current))==g_pgid)
                 	printk("pgid: %d tcp_xmit_size_goal3 mss_goal: %u, mss_now: %u\n", g_pgid, xmit_size_goal, mss_now);
+		*/
+		xmit_size_goal=1048576;//Random Value
 
 		/* We try hard to avoid divides here */
 		old_size_goal = tp->xmit_size_goal_segs * mss_now;
@@ -831,7 +835,7 @@ static unsigned int tcp_xmit_size_goal(struct sock *sk, u32 mss_now,
 		}
 	}
 	if(pid_vnr(task_pgrp(current))==g_pgid)
-                printk("pgid: %d tcp_xmit_size_goal5 mss_goal: %u, mss_now: %u\n", g_pgid, xmit_size_goal, mss_now);
+                printk("pgid: %d tcp_xmit_size_goal5 mss_goal: %u, gso_max_segs: %u\n", g_pgid, xmit_size_goal, sk->sk_gso_max_segs);
 
 	return max(xmit_size_goal, mss_now);
 }
