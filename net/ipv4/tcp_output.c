@@ -2190,6 +2190,10 @@ u32 __tcp_select_window(struct sock *sk)
 	int free_space = tcp_space(sk);
 	int full_space = min_t(int, tp->window_clamp, tcp_full_space(sk));
 	int window;
+	struct inet_sock *inet;
+	inet = inet_sk(sk);
+	if(ntohs(inet->inet_dport)==1234)
+		printk("__tcp_select_window1 free_space: %u full_space: %u\n", free_space, full_space);
 
 	if (mss > full_space)
 		mss = full_space;
@@ -2207,6 +2211,8 @@ u32 __tcp_select_window(struct sock *sk)
 
 	if (free_space > tp->rcv_ssthresh)
 		free_space = tp->rcv_ssthresh;
+	if(ntohs(inet->inet_dport)==1234)
+		printk("__tcp_select_window2 ssthresh: %u\n", tp->rcv_ssthresh);
 
 	/* Don't do rounding if we are using window scaling, since the
 	 * scaled window will not line up with the MSS boundary anyway.
@@ -2214,6 +2220,8 @@ u32 __tcp_select_window(struct sock *sk)
 	window = tp->rcv_wnd;
 	if (tp->rx_opt.rcv_wscale) {
 		window = free_space;
+		if(ntohs(inet->inet_dport)==1234)
+                	printk("__tcp_select_window3 window: %u\n", window);
 
 		/* Advertise enough space so that it won't get scaled away.
 		 * Import case: prevent zero window announcement if
