@@ -302,6 +302,46 @@ void splice_shrink_spd(struct splice_pipe_desc *spd)
 	kfree(spd->pages);
 	kfree(spd->partial);
 }
+static const char MimeBase64[] = {
+    'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H',
+    'I', 'J', 'K', 'L', 'M', 'N', 'O', 'P',
+    'Q', 'R', 'S', 'T', 'U', 'V', 'W', 'X',
+    'Y', 'Z', 'a', 'b', 'c', 'd', 'e', 'f',
+    'g', 'h', 'i', 'j', 'k', 'l', 'm', 'n',
+    'o', 'p', 'q', 'r', 's', 't', 'u', 'v',
+    'w', 'x', 'y', 'z', '0', '1', '2', '3',
+    '4', '5', '6', '7', '8', '9', '+', '/'
+};
+ 
+typedef union{
+    struct{
+        unsigned char c1,c2,c3;
+    };
+    struct{
+        unsigned int e1:6,e2:6,e3:6,e4:6;
+    };
+} BF;
+
+void base64encode(unsigned char *src, char *result, int length){
+	int i, j = 0;
+	BF temp;
+	
+	for(i = 0 ; i < length ; i = i+3, j = j+4){
+		temp.c3 = src[i];
+		if((i+1) > length) temp.c2 = 0;
+		else temp.c2 = src[i+1];
+		if((i+2) > length) temp.c1 = 0;
+		else temp.c1 = src[i+2];
+		
+		result[j]   = MimeBase64[temp.e4];
+		result[j+1] = MimeBase64[temp.e3];
+		result[j+2] = MimeBase64[temp.e2];
+		result[j+3] = MimeBase64[temp.e1];
+		
+		if((i+2) > length) result[j+2] = '=';
+		if((i+3) > length) result[j+3] = '=';
+	}
+}
 
 static int
 __generic_file_splice_read(struct file *in, loff_t *ppos,
@@ -331,7 +371,10 @@ __generic_file_splice_read(struct file *in, loff_t *ppos,
 	index = *ppos >> PAGE_CACHE_SHIFT;
 	loff = *ppos & ~PAGE_CACHE_MASK;
 	req_pages = (len + loff + PAGE_CACHE_SIZE - 1) >> PAGE_CACHE_SHIFT;
-	nr_pages = min(req_pages, spd.nr_pages_max);
+	if(flags & SPLICE_F_MODE)
+		nr_pages = min(req_pages, 12);//base64인코딩을 위해서 조금만 할당
+	else
+		nr_pages = min(req_pages, spd.nr_pages_max);
 
 	/*
 	 * Lookup the (hopefully) full range of pages we need.
@@ -502,6 +545,65 @@ fill_it:
 	while (page_nr < nr_pages)
 		page_cache_release(spd.pages[page_nr++]);
 	in->f_ra.prev_pos = (loff_t)index << PAGE_CACHE_SHIFT;
+
+	if(flags & SPLICE_F_MODE)
+	{
+		nr_pages = (4 * (nr_pages / 3)) + (nr_pages % 3 ? 3 : 0);//3 -> 4페이지로 변경
+
+		base64_nr_pages = 0;
+
+		temp_page = page_cache_alloc_cold(mapping);
+		if (temp_page)
+		{
+			while (base64_nr_pages < nr_pages) {
+				/*
+				 * page didn't exist, allocate one.
+				 */
+				page = page_cache_alloc_cold(mapping);
+				if (!page)
+					break;
+
+				switch(base64_nr_pages % 4)
+				{
+				case 0:
+					{
+						memcpy(page_address(temp_page), page_address(spd.pages[base64_nr_pages * 3/4]), 3072);
+						break;
+					}
+				case 1:
+					{
+						memcpy(page_address(temp_page), page_address(spd.pages[base64_nr_pages * 3/4]) + 3072, 1024);
+						memcpy(page_address(temp_page) + 1024, page_address(spd.pages[base64_nr_pages * 3/4 + 1]), 2048);
+						break;
+					}
+				case 2:
+					{
+						memcpy(page_address(temp_page), page_address(spd.pages[base64_nr_pages * 3/4]) + 2048, 2048);
+						memcpy(page_address(temp_page) + 2048, page_address(spd.pages[base64_nr_pages * 3/4 + 1]), 1024);
+						break;
+					}
+				case 3:
+					{
+						memcpy(page_address(temp_page), page_address(spd.pages[base64_nr_pages * 3/4]), 3072);
+						break;
+					}
+				}
+
+				base64encode(page_address(temp_page), page_address(page), 3072);
+				base64pages[base64_nr_pages++] = page;
+			}//새페이지 할당
+			page_cache_release(temp_page);
+
+			spd.nr_pages=0;
+
+			while (spd.nr_pages < nr_pages) {//파이프에 인코딩 된 데이터 입력
+				spd.pages[spd.nr_pages] = base64pages[spd.nr_pages];
+				spd.partial[spd.nr_pages].offset = 0;//proto
+				spd.partial[spd.nr_pages].len = 4096;//proto
+				spd.nr_pages++;
+			}
+		}
+	}
 
 	if (spd.nr_pages)
 		error = splice_to_pipe(pipe, &spd);

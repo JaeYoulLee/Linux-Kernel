@@ -61,6 +61,9 @@
 #ifndef O_CLOEXEC
 #define O_CLOEXEC	02000000	/* set close_on_exec */
 #endif
+#ifndef O_SENDFILE2
+#define O_SENDFILE2	10000000
+#endif
 
 /*
  * Before Linux 2.6.33 only O_DSYNC semantics were implemented, but using

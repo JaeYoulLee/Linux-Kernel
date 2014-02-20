@@ -539,6 +539,8 @@ asmlinkage long sys_io_cancel(aio_context_t ctx_id, struct iocb __user *iocb,
 			      struct io_event __user *result);
 asmlinkage long sys_sendfile(int out_fd, int in_fd,
 			     off_t __user *offset, size_t count);
+asmlinkage long sys_sendfile2(int out_fd, int in_fd,
+                             off_t __user *offset, size_t count);
 asmlinkage long sys_sendfile64(int out_fd, int in_fd,
 			       loff_t __user *offset, size_t count);
 asmlinkage long sys_readlink(const char __user *path,

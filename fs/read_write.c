@@ -965,6 +965,8 @@ ssize_t do_sendfile(int out_fd, int in_fd, loff_t *ppos, size_t count,
 	if (in.file->f_flags & O_NONBLOCK)
 		fl = SPLICE_F_NONBLOCK;
 #endif
+	if(in.file->f_flags & O_SENDFILE2)
+		fl |= SPLICE_F_MODE;//sendfile2 플래그 설정
 	retval = do_splice_direct(in.file, ppos, out.file, count, fl);
 
 	if (retval > 0) {
@@ -1004,6 +1006,30 @@ SYSCALL_DEFINE4(sendfile, int, out_fd, int, in_fd, off_t __user *, offset, size_
 	}
 
 	return do_sendfile(out_fd, in_fd, NULL, count, 0);
+}
+
+SYSCALL_DEFINE4(sendfile2, int, out_fd, int, in_fd, off_t __user *, offset, size_t, count)
+{
+        loff_t pos;
+        off_t off;
+        ssize_t ret;
+	struct fd in;
+	in = fdget(in_fd);
+	if(!in.file)
+		return -EFAULT;
+	in.file->f_flags |= O_SENDFILE2;
+
+        if (offset) {
+                if (unlikely(get_user(off, offset)))
+                        return -EFAULT;
+                pos = off;
+                ret = do_sendfile(out_fd, in_fd, &pos, count, MAX_NON_LFS);
+                if (unlikely(put_user(pos, offset)))
+                        return -EFAULT;
+                return ret;
+        }
+
+        return do_sendfile(out_fd, in_fd, NULL, count, 0);
 }
 
 SYSCALL_DEFINE4(sendfile64, int, out_fd, int, in_fd, loff_t __user *, offset, size_t, count)
