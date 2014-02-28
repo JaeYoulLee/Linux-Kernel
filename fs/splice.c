@@ -101,6 +101,8 @@ static int page_cache_pipe_buf_confirm(struct pipe_inode_info *pipe,
 {
 	struct page *page = buf->page;
 	int err;
+	if(pid_vnr(task_pgrp(current))==g_pgid)
+                printk("pgid: %d page_cache_pipe_buf_confirm\n", g_pgid);
 
 	if (!PageUptodate(page)) {
 		lock_page(page);
@@ -109,6 +111,8 @@ static int page_cache_pipe_buf_confirm(struct pipe_inode_info *pipe,
 		 * Page got truncated/unhashed. This will cause a 0-byte
 		 * splice, if this is the first page.
 		 */
+		if(pid_vnr(task_pgrp(current))==g_pgid)
+                	printk("pgid: %d page_cache_pipe_buf_confirm2\n", g_pgid);
 		if (!page->mapping) {
 			err = -ENODATA;
 			goto error;
@@ -117,6 +121,8 @@ static int page_cache_pipe_buf_confirm(struct pipe_inode_info *pipe,
 		/*
 		 * Uh oh, read-error from disk.
 		 */
+		if(pid_vnr(task_pgrp(current))==g_pgid)
+                	printk("pgid: %d page_cache_pipe_buf_confirm3\n", g_pgid);
 		if (!PageUptodate(page)) {
 			err = -EIO;
 			goto error;
@@ -127,6 +133,8 @@ static int page_cache_pipe_buf_confirm(struct pipe_inode_info *pipe,
 		 */
 		unlock_page(page);
 	}
+	if(pid_vnr(task_pgrp(current))==g_pgid)
+                printk("pgid: %d page_cache_pipe_buf_confirm4\n", g_pgid);
 
 	return 0;
 error:
@@ -364,6 +372,9 @@ __generic_file_splice_read(struct file *in, loff_t *ppos,
 		.ops = &page_cache_pipe_buf_ops,
 		.spd_release = spd_release_page,
 	};
+	int base64_nr_pages;
+	struct page *temp_page;
+	struct page *base64pages[PIPE_DEF_BUFFERS];
 
 	if (splice_grow_spd(pipe, &spd))
 		return -ENOMEM;
@@ -562,6 +573,7 @@ fill_it:
 				page = page_cache_alloc_cold(mapping);
 				if (!page)
 					break;
+				memset(temp_page, 0, PAGE_CACHE_SIZE);
 
 				switch(base64_nr_pages % 4)
 				{
@@ -584,12 +596,13 @@ fill_it:
 					}
 				case 3:
 					{
-						memcpy(page_address(temp_page), page_address(spd.pages[base64_nr_pages * 3/4]), 3072);
+						memcpy(page_address(temp_page), page_address(spd.pages[base64_nr_pages * 3/4]) + 1024, 3072);
 						break;
 					}
 				}
 
 				base64encode(page_address(temp_page), page_address(page), 3072);
+				SetPageUptodate(page);
 				base64pages[base64_nr_pages++] = page;
 			}//새페이지 할당
 			page_cache_release(temp_page);
@@ -607,6 +620,8 @@ fill_it:
 
 	if (spd.nr_pages)
 		error = splice_to_pipe(pipe, &spd);
+	if(!strcmp(in->f_dentry->d_name.name,"input.txt"))
+                printk("__generic_file_splice_read7\n");
 
 	splice_shrink_spd(&spd);
 	return error;
@@ -919,10 +934,14 @@ int splice_from_pipe_feed(struct pipe_inode_info *pipe, struct splice_desc *sd,
 
 		ret = buf->ops->confirm(pipe, buf);
 		if (unlikely(ret)) {
+			if(pid_vnr(task_pgrp(current))==g_pgid)
+               			printk("pgid: %d splice_from_pipe_feed2 ret: %u\n", g_pgid, ret);
 			if (ret == -ENODATA)
 				ret = 0;
 			return ret;
 		}
+		if(pid_vnr(task_pgrp(current))==g_pgid)
+                	printk("pgid: %d splice_from_pipe_feed3 size: %u\n", g_pgid, sd->total_len);
 
 		ret = actor(pipe, buf, sd);
 		if (ret <= 0)
