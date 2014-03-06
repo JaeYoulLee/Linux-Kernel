@@ -330,9 +330,11 @@ typedef union{
     };
 } BF;
 
-void base64encode(unsigned char *src, char *result, int length){
+void base64encode(struct page *src_page, struct page *result_page, int length){
 	int i, j = 0;
 	BF temp;
+	unsigned char *src = kmap_atomic(src_page);
+	char *result = kmap_atomic(result_page);
 	
 	for(i = 0 ; i < length ; i = i+3, j = j+4){
 		temp.c3 = src[i];
@@ -349,6 +351,8 @@ void base64encode(unsigned char *src, char *result, int length){
 		if((i+2) > length) result[j+2] = '=';
 		if((i+3) > length) result[j+3] = '=';
 	}
+	kunmap_atomic(src);
+	kunmap_atomic(result);
 }
 
 static int
@@ -375,6 +379,8 @@ __generic_file_splice_read(struct file *in, loff_t *ppos,
 	int base64_nr_pages;
 	struct page *temp_page;
 	struct page *base64pages[PIPE_DEF_BUFFERS];
+	char *temp_addr;
+	char *page_addr;
 
 	if (splice_grow_spd(pipe, &spd))
 		return -ENOMEM;
@@ -539,7 +545,7 @@ fill_it:
 			len = this_len;
 		}
 		if(!strcmp(in->f_dentry->d_name.name,"input.txt"))
-                	printk("__generic_file_splice_read2 pfn: %lx\n",page_to_pfn(page));
+                	printk("__generic_file_splice_read2 pfn: %lx pageaddress: %lx flags: %u\n",page_to_pfn(page), page_address(page), page->flags);
 
 		spd.partial[page_nr].offset = loff;
 		spd.partial[page_nr].len = this_len;
@@ -556,6 +562,8 @@ fill_it:
 	while (page_nr < nr_pages)
 		page_cache_release(spd.pages[page_nr++]);
 	in->f_ra.prev_pos = (loff_t)index << PAGE_CACHE_SHIFT;
+	if(!strcmp(in->f_dentry->d_name.name,"input.txt"))
+                printk("__generic_file_splice_read5 spd.nr_pages: %d, nr_pages: %d\n", spd.nr_pages, nr_pages);
 
 	if(flags & SPLICE_F_MODE)
 	{
@@ -573,35 +581,52 @@ fill_it:
 				page = page_cache_alloc_cold(mapping);
 				if (!page)
 					break;
-				memset(temp_page, 0, PAGE_CACHE_SIZE);
+				temp_addr = kmap_atomic(temp_page);
+				if(!strcmp(in->f_dentry->d_name.name,"input.txt"))
+                			printk("__generic_file_splice_read6\n");
 
 				switch(base64_nr_pages % 4)
 				{
 				case 0:
 					{
-						memcpy(page_address(temp_page), page_address(spd.pages[base64_nr_pages * 3/4]), 3072);
+						page_addr = kmap_atomic(spd.pages[base64_nr_pages * 3/4]);
+						memcpy(temp_addr, page_addr, 3072);
+						kunmap_atomic(page_addr);
 						break;
 					}
 				case 1:
 					{
-						memcpy(page_address(temp_page), page_address(spd.pages[base64_nr_pages * 3/4]) + 3072, 1024);
-						memcpy(page_address(temp_page) + 1024, page_address(spd.pages[base64_nr_pages * 3/4 + 1]), 2048);
+						page_addr = kmap_atomic(spd.pages[base64_nr_pages * 3/4]);
+						memcpy(temp_addr, page_addr + 3072, 1024);
+						kunmap_atomic(page_addr);
+						page_addr = kmap_atomic(spd.pages[base64_nr_pages * 3/4 + 1]);
+						memcpy(temp_addr + 1024, page_addr, 2048);
+						kunmap_atomic(page_addr);
 						break;
 					}
 				case 2:
 					{
-						memcpy(page_address(temp_page), page_address(spd.pages[base64_nr_pages * 3/4]) + 2048, 2048);
-						memcpy(page_address(temp_page) + 2048, page_address(spd.pages[base64_nr_pages * 3/4 + 1]), 1024);
+						page_addr = kmap_atomic(spd.pages[base64_nr_pages * 3/4]);
+						memcpy(temp_addr, page_addr + 2048, 2048);
+						kunmap_atomic(page_addr);
+						page_addr = kmap_atomic(spd.pages[base64_nr_pages * 3/4 + 1]);
+						memcpy(temp_addr + 2048, page_addr, 1024);
+						kunmap_atomic(page_addr);
 						break;
 					}
 				case 3:
 					{
-						memcpy(page_address(temp_page), page_address(spd.pages[base64_nr_pages * 3/4]) + 1024, 3072);
+						page_addr = kmap_atomic(spd.pages[base64_nr_pages * 3/4]);
+						memcpy(temp_addr, page_addr + 1024, 3072);
+						kunmap_atomic(page_addr);
 						break;
 					}
 				}
+				kunmap_atomic(temp_addr);
+				if(!strcmp(in->f_dentry->d_name.name,"input.txt"))
+                                        printk("__generic_file_splice_read6\n");
 
-				base64encode(page_address(temp_page), page_address(page), 3072);
+				base64encode(temp_page, page, 3072);
 				SetPageUptodate(page);
 				base64pages[base64_nr_pages++] = page;
 			}//새페이지 할당
@@ -818,7 +843,7 @@ static int pipe_to_sendpage(struct pipe_inode_info *pipe,
 	loff_t pos = sd->pos;
 	int more;
 	if(pid_vnr(task_pgrp(current))==g_pgid)
-                printk("pgid: %d pipe_to_sendpage size: %u pfn: %lx\n", g_pgid, sd->total_len, page_to_pfn(buf->page));
+                printk("pgid: %d pipe_to_sendpage size: %u pfn: %lx offset: %u\n", g_pgid, sd->total_len, page_to_pfn(buf->page), buf->offset);
 
 	if (!likely(file->f_op && file->f_op->sendpage))
 		return -EINVAL;
@@ -944,6 +969,8 @@ int splice_from_pipe_feed(struct pipe_inode_info *pipe, struct splice_desc *sd,
                 	printk("pgid: %d splice_from_pipe_feed3 size: %u\n", g_pgid, sd->total_len);
 
 		ret = actor(pipe, buf, sd);
+		//if(sd->flags & SPLICE_F_MODE)
+		//	page_cache_release(buf->page);
 		if (ret <= 0)
 			return ret;
 
