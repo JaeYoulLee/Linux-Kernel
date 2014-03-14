@@ -381,6 +381,9 @@ __generic_file_splice_read(struct file *in, loff_t *ppos,
 	struct page *base64pages[PIPE_DEF_BUFFERS];
 	char *temp_addr;
 	char *page_addr;
+	int temp_nr_pages;
+	int plain_size;
+	int encode_size;
 
 	if (splice_grow_spd(pipe, &spd))
 		return -ENOMEM;
@@ -448,6 +451,8 @@ __generic_file_splice_read(struct file *in, loff_t *ppos,
 	 * pages, fill in the partial map, etc.
 	 */
 	index = *ppos >> PAGE_CACHE_SHIFT;
+	if(!strcmp(in->f_dentry->d_name.name,"input.txt"))
+                printk("__generic_file_splice_read2 index: %u\n", index);
 	nr_pages = spd.nr_pages;
 	spd.nr_pages = 0;
 	for (page_nr = 0; page_nr < nr_pages; page_nr++) {
@@ -545,7 +550,7 @@ fill_it:
 			len = this_len;
 		}
 		if(!strcmp(in->f_dentry->d_name.name,"input.txt"))
-                	printk("__generic_file_splice_read2 pfn: %lx pageaddress: %lx flags: %u\n",page_to_pfn(page), page_address(page), page->flags);
+                	printk("__generic_file_splice_read2 pfn: %lx pageaddress: %lx index: %u\n",page_to_pfn(page), page_address(page), index);
 
 		spd.partial[page_nr].offset = loff;
 		spd.partial[page_nr].len = this_len;
@@ -567,14 +572,15 @@ fill_it:
 
 	if(flags & SPLICE_F_MODE)
 	{
-		nr_pages = (4 * (nr_pages / 3)) + (nr_pages % 3 ? 3 : 0);//3 -> 4페이지로 변경
+		temp_nr_pages = ((4 * nr_pages) / 3) + (nr_pages % 3 ? 1 : 0);//3 -> 4페이지로 변경
 
 		base64_nr_pages = 0;
+		plain_size = 0;
 
 		temp_page = page_cache_alloc_cold(mapping);
 		if (temp_page)
 		{
-			while (base64_nr_pages < nr_pages) {
+			while (base64_nr_pages < temp_nr_pages) {
 				/*
 				 * page didn't exist, allocate one.
 				 */
@@ -583,7 +589,7 @@ fill_it:
 					break;
 				temp_addr = kmap_atomic(temp_page);
 				if(!strcmp(in->f_dentry->d_name.name,"input.txt"))
-                			printk("__generic_file_splice_read6\n");
+					printk("__generic_file_splice_read6 base_64_pages: %d, nr_pages: %d\n", base64_nr_pages, temp_nr_pages);
 
 				switch(base64_nr_pages % 4)
 				{
@@ -592,59 +598,99 @@ fill_it:
 						page_addr = kmap_atomic(spd.pages[base64_nr_pages * 3/4]);
 						memcpy(temp_addr, page_addr, 3072);
 						kunmap_atomic(page_addr);
+						plain_size += min(spd.partial[base64_nr_pages * 3/4].len, 3072);
+						if(spd.partial[base64_nr_pages * 3/4].len <= 3072)
+							temp_nr_pages--;
 						break;
 					}
 				case 1:
 					{
-						page_addr = kmap_atomic(spd.pages[base64_nr_pages * 3/4]);
-						memcpy(temp_addr, page_addr + 3072, 1024);
-						kunmap_atomic(page_addr);
-						page_addr = kmap_atomic(spd.pages[base64_nr_pages * 3/4 + 1]);
-						memcpy(temp_addr + 1024, page_addr, 2048);
-						kunmap_atomic(page_addr);
+						if(base64_nr_pages * 3/4 <= nr_pages - 1)
+						{
+							page_addr = kmap_atomic(spd.pages[base64_nr_pages * 3/4]);
+							memcpy(temp_addr, page_addr + 3072, 1024);
+							kunmap_atomic(page_addr);
+							plain_size += min(spd.partial[base64_nr_pages * 3/4].len - 3072, 1024);
+						}
+						if(base64_nr_pages * 3/4 + 1 <= nr_pages - 1)
+						{
+							page_addr = kmap_atomic(spd.pages[base64_nr_pages * 3/4 + 1]);
+							memcpy(temp_addr + 1024, page_addr, 2048);
+							kunmap_atomic(page_addr);
+							plain_size += min(spd.partial[base64_nr_pages * 3/4 + 1].len, 2048);
+						}
 						break;
 					}
 				case 2:
 					{
-						page_addr = kmap_atomic(spd.pages[base64_nr_pages * 3/4]);
-						memcpy(temp_addr, page_addr + 2048, 2048);
-						kunmap_atomic(page_addr);
-						page_addr = kmap_atomic(spd.pages[base64_nr_pages * 3/4 + 1]);
-						memcpy(temp_addr + 2048, page_addr, 1024);
-						kunmap_atomic(page_addr);
+						if(base64_nr_pages * 3/4 <= nr_pages - 1)
+						{
+							page_addr = kmap_atomic(spd.pages[base64_nr_pages * 3/4]);
+							memcpy(temp_addr, page_addr + 2048, 2048);
+							kunmap_atomic(page_addr);
+							plain_size += min(spd.partial[base64_nr_pages * 3/4].len - 2048, 2048);
+						}
+						if(base64_nr_pages * 3/4 + 1 <= nr_pages - 1)
+						{
+							page_addr = kmap_atomic(spd.pages[base64_nr_pages * 3/4 + 1]);
+							memcpy(temp_addr + 2048, page_addr, 1024);
+							kunmap_atomic(page_addr);
+							plain_size += min(spd.partial[base64_nr_pages * 3/4 + 1].len, 1024);
+							if(spd.partial[base64_nr_pages * 3/4 + 1].len <= 1024)
+								temp_nr_pages--;
+						}
 						break;
 					}
 				case 3:
 					{
-						page_addr = kmap_atomic(spd.pages[base64_nr_pages * 3/4]);
-						memcpy(temp_addr, page_addr + 1024, 3072);
-						kunmap_atomic(page_addr);
+						if(base64_nr_pages * 3/4 <= nr_pages - 1)
+						{
+							page_addr = kmap_atomic(spd.pages[base64_nr_pages * 3/4]);
+							memcpy(temp_addr, page_addr + 1024, 3072);
+							kunmap_atomic(page_addr);
+							plain_size += min(spd.partial[base64_nr_pages * 3/4].len - 1024, 3072);
+						}
 						break;
 					}
 				}
 				kunmap_atomic(temp_addr);
-				if(!strcmp(in->f_dentry->d_name.name,"input.txt"))
-                                        printk("__generic_file_splice_read6\n");
-
-				base64encode(temp_page, page, 3072);
+				if(base64_nr_pages == temp_nr_pages - 1)
+					base64encode(temp_page, page, plain_size % 3072 ? plain_size % 3072 : 3072);
+				else
+					base64encode(temp_page, page, 3072);
 				SetPageUptodate(page);
 				base64pages[base64_nr_pages++] = page;
 			}//새페이지 할당
 			page_cache_release(temp_page);
+			if(!strcmp(in->f_dentry->d_name.name,"input.txt"))
+                                printk("__generic_file_splice_read61 plain_size: %d\n", plain_size);
+			encode_size = (4 * (plain_size / 3)) + (plain_size % 3 ? 4 : 0);
+			if(!strcmp(in->f_dentry->d_name.name,"input.txt"))
+                                printk("__generic_file_splice_read61 plain_size: %d\n", plain_size);
 
 			spd.nr_pages=0;
 
-			while (spd.nr_pages < nr_pages) {//파이프에 인코딩 된 데이터 입력
+			while (spd.nr_pages < temp_nr_pages) {//파이프에 인코딩 된 데이터 입력
 				spd.pages[spd.nr_pages] = base64pages[spd.nr_pages];
 				spd.partial[spd.nr_pages].offset = 0;//proto
 				spd.partial[spd.nr_pages].len = 4096;//proto
 				spd.nr_pages++;
 			}
+			spd.partial[spd.nr_pages-1].len = encode_size % 4096 ? encode_size % 4096 : 4096;
 		}
 	}
 
-	if (spd.nr_pages)
-		error = splice_to_pipe(pipe, &spd);
+	if(flags & SPLICE_F_MODE)
+	{
+		if (spd.nr_pages)
+		{	
+			splice_to_pipe(pipe, &spd);
+			error = plain_size;
+		}
+	}
+	else
+		if (spd.nr_pages)
+			error = splice_to_pipe(pipe, &spd);
 	if(!strcmp(in->f_dentry->d_name.name,"input.txt"))
                 printk("__generic_file_splice_read7\n");
 
@@ -684,6 +730,8 @@ ssize_t generic_file_splice_read(struct file *in, loff_t *ppos,
 		len = left;
 
 	ret = __generic_file_splice_read(in, ppos, pipe, len, flags);
+	if(!strcmp(in->f_dentry->d_name.name,"input.txt"))
+                printk("generic_file_splice_read2 ret: %u\n",ret);
 	if (ret > 0) {
 		*ppos += ret;
 		file_accessed(in);
@@ -969,8 +1017,6 @@ int splice_from_pipe_feed(struct pipe_inode_info *pipe, struct splice_desc *sd,
                 	printk("pgid: %d splice_from_pipe_feed3 size: %u\n", g_pgid, sd->total_len);
 
 		ret = actor(pipe, buf, sd);
-		//if(sd->flags & SPLICE_F_MODE)
-		//	page_cache_release(buf->page);
 		if (ret <= 0)
 			return ret;
 
@@ -1336,6 +1382,7 @@ ssize_t splice_direct_to_actor(struct file *in, struct splice_desc *sd,
 	umode_t i_mode;
 	size_t len;
 	int i, flags;
+	int temp_ret;
 
 	/*
 	 * We require the input being a regular file, as we don't want to
@@ -1388,6 +1435,13 @@ ssize_t splice_direct_to_actor(struct file *in, struct splice_desc *sd,
 		ret = do_splice_to(in, &pos, pipe, len, flags);
 		if (unlikely(ret <= 0))
 			goto out_release;
+		if(flags & SPLICE_F_MODE)
+		{
+			temp_ret = ret;
+			ret = (4 * (ret / 3)) + (ret % 3 ? 4 : 0);
+		}
+		if(!strcmp(in->f_dentry->d_name.name,"input.txt"))
+                	printk("splice_direct_to_actor2 ret: %u\n",ret);
 
 		read_len = ret;
 		sd->total_len = read_len;
@@ -1398,9 +1452,16 @@ ssize_t splice_direct_to_actor(struct file *in, struct splice_desc *sd,
 		 * could get stuck data in the internal pipe:
 		 */
 		ret = actor(pipe, sd);
+		if(!strcmp(in->f_dentry->d_name.name,"input.txt"))
+                        printk("splice_direct_to_actor3 ret: %u\n",ret);
 		if (unlikely(ret <= 0)) {
 			sd->pos = prev_pos;
 			goto out_release;
+		}
+		if(flags & SPLICE_F_MODE)
+		{
+			ret = temp_ret;
+			read_len = temp_ret;
 		}
 
 		bytes += ret;
