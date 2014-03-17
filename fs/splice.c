@@ -669,6 +669,11 @@ fill_it:
                                 printk("__generic_file_splice_read61 plain_size: %d\n", plain_size);
 
 			spd.nr_pages=0;
+			while (spd.nr_pages < nr_pages)
+			{
+				page_cache_release(spd.pages[spd.nr_pages++]);
+			}
+			spd.nr_pages=0;
 
 			while (spd.nr_pages < temp_nr_pages) {//파이프에 인코딩 된 데이터 입력
 				spd.pages[spd.nr_pages] = base64pages[spd.nr_pages];
