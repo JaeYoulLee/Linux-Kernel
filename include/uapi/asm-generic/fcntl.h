@@ -62,7 +62,7 @@
 #define O_CLOEXEC	02000000	/* set close_on_exec */
 #endif
 #ifndef O_SENDFILE2
-#define O_SENDFILE2	10000000
+#define O_SENDFILE2	33554432
 #endif
 
 /*
